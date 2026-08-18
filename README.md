@@ -66,6 +66,8 @@ Apply in order:
 2. `database/002_operations.sql`
 3. `database/003_execution_ledgers.sql`
 4. `database/004_reconciliation.sql`
+5. `database/005_runtime_security.sql`
+6. `database/006_schema_fixes.sql`
 
 The SQL migration chain is the database source of truth.
 
