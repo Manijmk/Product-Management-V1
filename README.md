@@ -6,6 +6,21 @@ Seed vertical: water-can delivery.
 
 The platform is intentionally generic enough to support future verticals such as LPG, dairy, newspaper delivery, and similar recurring route operations.
 
+## Locked Backend Stack
+
+- Node.js 24 LTS
+- TypeScript
+- NestJS
+- Fastify
+- PostgreSQL
+- Prisma + parameterized PostgreSQL SQL
+- REST + OpenAPI
+- Jest
+- Docker Compose
+- Modular Monolith
+
+Redis + BullMQ are deferred until background processing is required.
+
 ## Core Model
 
 ```text
@@ -52,11 +67,45 @@ Apply in order:
 3. `database/003_execution_ledgers.sql`
 4. `database/004_reconciliation.sql`
 
-## Backend Status
+The SQL migration chain is the database source of truth.
 
-The backend folder is intentionally empty for the Codex implementation handoff.
+Prisma must map to the resulting database and must not replace or weaken:
 
-The implementation agent must read `AGENTS.md` and all Sprint 0 docs before scaffolding the backend.
+- RLS,
+- triggers,
+- append-only guards,
+- generated columns,
+- custom constraints,
+- views.
+
+## Backend Target Structure
+
+```text
+backend/
+├── src/
+│   ├── main.ts
+│   ├── app.module.ts
+│   ├── config/
+│   ├── database/
+│   ├── auth/
+│   ├── tenancy/
+│   ├── users/
+│   ├── staff/
+│   ├── products/
+│   ├── customers/
+│   ├── routes/
+│   ├── vehicles/
+│   ├── trips/
+│   ├── stop-events/
+│   ├── inventory/
+│   ├── money/
+│   └── reconciliation/
+│
+├── prisma/
+├── test/
+├── package.json
+└── tsconfig.json
+```
 
 ## Sprint 0 Goal
 

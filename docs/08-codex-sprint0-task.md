@@ -4,6 +4,25 @@
 
 Implement the first production-quality PMS backend slice from the repository specifications.
 
+## Locked Stack
+
+Use exactly:
+
+- Node.js 24 LTS
+- TypeScript
+- NestJS
+- Fastify
+- PostgreSQL
+- Prisma + parameterized PostgreSQL SQL
+- REST + OpenAPI
+- Jest
+- Docker Compose
+- Modular Monolith
+
+Do not replace NestJS with Express/Fastify-only, another framework, another database, or another ORM without explicit approval.
+
+Do not introduce Redis/BullMQ yet unless a documented Sprint 0 requirement genuinely needs it.
+
 ## Required Reading
 
 Before changing code, read:
@@ -19,13 +38,32 @@ Before changing code, read:
 9. `docs/07-test-scenarios.md`
 10. all SQL files in `/database`
 
+## First Implementation Step
+
+Before implementing business APIs:
+
+1. Scaffold NestJS using Fastify.
+2. Enable TypeScript strict mode.
+3. Add config/env validation.
+4. Add structured logging.
+5. Add Swagger/OpenAPI.
+6. Add PostgreSQL connectivity.
+7. Add Prisma mapped to the existing SQL schema.
+8. Add database migration/bootstrap scripts that apply `/database` files in order.
+9. Add a tenant-context transaction helper that executes `SET LOCAL app.tenant_id`.
+10. Add test infrastructure against PostgreSQL.
+11. Run all four SQL migrations against a clean database.
+12. Verify RLS is active in integration tests.
+
+Only then begin feature APIs.
+
 ## Scope
 
 Implement:
 
 - backend project scaffold,
 - configuration/env handling,
-- PostgreSQL connection + migrations,
+- PostgreSQL connection + migration/bootstrap,
 - authenticated tenant context abstraction,
 - foundation/master-data APIs,
 - route/trip APIs,
@@ -50,6 +88,15 @@ Do not implement:
 - full vehicle maintenance/compliance,
 - multi-vertical UI.
 
+## Database Rules
+
+- SQL migrations under `/database` are authoritative.
+- Prisma must map to the resulting DB.
+- Do not replace SQL RLS, triggers, generated columns, views or ledger guards with Prisma-only equivalents.
+- Never disable RLS to make implementation easier.
+- `tenant_id` must come from authenticated server context.
+- Do not add authoritative mutable stock/balance fields.
+
 ## Implementation Requirements
 
 - Follow `AGENTS.md`.
@@ -57,19 +104,17 @@ Do not implement:
 - Use application services for transactional workflows.
 - Use domain services for exchange/pricing/damage/reconciliation calculations.
 - Apply all database migrations in order.
-- Never disable RLS to make tests pass.
-- Use server-resolved tenant context.
-- Do not add mutable balance/stock columns.
-- Do not add ledger UPDATE/DELETE operations.
-- Implement stable API error codes.
-- Add migrations/seeds needed for local development.
-- Add README setup instructions after selecting the concrete backend stack.
+- Use stable API error codes.
+- Add local development seed data.
+- Add Docker Compose for PostgreSQL.
+- Add README setup/run/test commands after scaffolding.
 
 ## Test Gate
 
 At minimum automate acceptance criteria:
 
 - tenant isolation,
+- RLS enforcement,
 - Route → Trip copy,
 - live TripStop addition,
 - temporary/permanent staff-created customer behavior,
@@ -91,7 +136,7 @@ At minimum automate acceptance criteria:
 When implementation is complete:
 
 1. run tests,
-2. run migrations on a clean local database,
+2. run migrations against a clean database,
 3. report test results,
 4. summarize architecture decisions,
 5. list any spec ambiguity encountered,

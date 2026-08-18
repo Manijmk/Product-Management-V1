@@ -2,6 +2,31 @@
 
 These instructions apply to the entire repository.
 
+## Locked Technology Stack
+
+Do not substitute the backend stack unless the repository owner explicitly approves a change.
+
+- Runtime: Node.js 24 LTS
+- Language: TypeScript
+- Backend framework: NestJS
+- HTTP adapter: Fastify
+- Database: PostgreSQL
+- Data access: Prisma + parameterized PostgreSQL SQL where Prisma is not suitable
+- API style: REST
+- API documentation: OpenAPI / Swagger
+- Validation: NestJS DTO validation
+- Logging: Pino-compatible structured logging
+- Testing: Jest + integration tests against PostgreSQL
+- Local development: Docker Compose
+- Architecture: Modular Monolith
+- Async processing later: Redis + BullMQ
+
+Important database rule:
+
+- SQL migrations under `/database` are the source of truth for database structure.
+- Prisma is an application data-access layer, not the authority for replacing RLS, triggers, generated columns, views, append-only guards, or custom constraints.
+- Do not run Prisma-generated schema changes that remove or weaken the SQL design.
+
 ## Product Intent
 
 PMS is a multi-tenant recurring route-delivery and exchange operations platform.
@@ -23,8 +48,73 @@ Core distinction:
 - Never trust a `tenant_id` supplied by the client.
 - Tenant context must come from authenticated server context.
 - PostgreSQL RLS must remain enabled and enforced.
-- Prefer clear application/domain service boundaries over business logic in controllers.
+- Keep controllers thin.
+- Use application services for workflows.
+- Use domain services for reusable business calculations.
+- Keep repository/data-access code free of hidden business policy.
 - Do not couple business-specific terminology such as "water can" into generic core services.
+
+Recommended dependency direction:
+
+```text
+Controller
+   ↓
+Application Service
+   ↓
+Domain Services
+   ↓
+Repository / Prisma / SQL
+   ↓
+PostgreSQL
+```
+
+## Suggested NestJS Module Structure
+
+```text
+backend/src/
+├── app.module.ts
+├── main.ts
+├── config/
+├── database/
+├── auth/
+├── tenancy/
+├── users/
+├── staff/
+├── products/
+├── customers/
+├── routes/
+├── vehicles/
+├── trips/
+├── stop-events/
+├── inventory/
+├── money/
+└── reconciliation/
+```
+
+For complex modules, prefer:
+
+```text
+module/
+├── module.controller.ts
+├── module.module.ts
+├── application/
+├── domain/
+├── dto/
+├── repository/
+└── tests/
+```
+
+## Database / Prisma Rules
+
+- Keep SQL migrations authoritative.
+- Prisma models should reflect the database, not redesign it.
+- Use Prisma for normal typed CRUD and transactional orchestration where suitable.
+- Use parameterized raw SQL where PostgreSQL-specific behavior is required.
+- Every tenant-scoped write workflow must run inside one DB transaction.
+- Tenant context must be set inside the same transaction with:
+  `SET LOCAL app.tenant_id = '<authenticated tenant id>'`
+- Never disable RLS to simplify development or tests.
+- Never let the client supply arbitrary tenant context.
 
 ## Ledger Rules
 
@@ -120,13 +210,15 @@ Do not recalculate historical transactions using current prices.
 
 ## Coding Rules
 
-- Keep controllers thin.
-- Put transactional workflows in application services.
-- Put reusable business calculations in domain services.
-- Repositories/data-access code must not contain hidden business rules.
+- TypeScript strict mode must remain enabled.
+- Do not use `any` as a shortcut in domain/application code.
+- Use stable machine-readable error codes.
+- Do not return raw database exceptions to clients.
 - Every write workflow that affects stock or money must execute inside one database transaction.
-- Return stable machine-readable error codes in APIs.
 - Never silently coerce invalid business inputs.
+- Avoid circular module dependencies.
+- Prefer explicit DTOs and response contracts.
+- Keep business logic testable without requiring HTTP.
 
 ## Testing Rules
 

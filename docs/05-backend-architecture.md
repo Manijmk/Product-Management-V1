@@ -1,5 +1,22 @@
 # 05 — Backend Architecture
 
+## Locked Stack
+
+- Node.js 24 LTS
+- TypeScript
+- NestJS
+- Fastify
+- PostgreSQL
+- Prisma for typed application data access
+- Parameterized PostgreSQL SQL for DB-specific operations
+- REST APIs
+- Swagger/OpenAPI
+- Jest
+- Docker Compose
+- Modular Monolith
+
+Redis + BullMQ are intentionally deferred until asynchronous workloads are introduced.
+
 ## Goal
 
 Keep HTTP transport, workflow orchestration, business rules and persistence clearly separated.
@@ -7,16 +24,68 @@ Keep HTTP transport, workflow orchestration, business rules and persistence clea
 Recommended layering:
 
 ```text
-Controller / Route Handler
-          ↓
+NestJS Controller
+        ↓
 Application Service
-          ↓
+        ↓
 Domain Services
-          ↓
-Repositories
-          ↓
+        ↓
+Repository / Prisma / SQL
+        ↓
 PostgreSQL
 ```
+
+## NestJS Modules
+
+Initial modules:
+
+```text
+auth
+tenancy
+users
+staff
+products
+customers
+routes
+vehicles
+trips
+stop-events
+inventory
+money
+reconciliation
+```
+
+Avoid one giant "core" module.
+
+## Fastify
+
+NestJS must run using the Fastify adapter.
+
+`main.ts` should bootstrap `NestFastifyApplication`.
+
+Global concerns should include:
+
+- validation,
+- structured logging,
+- API version prefix,
+- Swagger/OpenAPI,
+- request correlation ID,
+- consistent exception mapping.
+
+## TypeScript
+
+Enable strict mode.
+
+Do not use `any` to bypass domain typing.
+
+Prefer explicit types/unions for business states such as:
+
+- TripStatus
+- QuantityMode
+- PartyStatus
+- StopStatus
+- ExchangeResolution
+- ReconciliationStatus
 
 ## Controller Responsibilities
 
@@ -78,9 +147,9 @@ Outputs:
 
 Resolution:
 
-1. active PartyProductPrice
-2. active ProductPrice
-3. approved staff override
+1. active PartyProductPrice,
+2. active ProductPrice,
+3. approved staff override.
 
 Returns an immutable pricing snapshot for the StopEvent.
 
@@ -100,16 +169,29 @@ Produces deterministic charges, payments, damage charges, cash handovers and adj
 
 Calculates expected stock and cash from ledgers and enforces close rules.
 
-## Repository Layer
+## Prisma / SQL Strategy
 
-Repositories should:
+SQL migrations under `/database` are authoritative.
 
-- execute persistence operations,
-- honor tenant context,
-- expose explicit query methods,
-- avoid embedding business policy.
+Prisma must map to the existing schema.
 
-## Request Transaction Pattern
+Do not allow Prisma migrations to:
+
+- remove RLS,
+- remove triggers,
+- change append-only ledger protections,
+- drop derived views,
+- simplify constraints that encode business invariants.
+
+Use Prisma for normal typed data access.
+
+Use parameterized raw SQL for operations such as:
+
+- `SET LOCAL app.tenant_id`,
+- view/report access where convenient,
+- PostgreSQL-specific behavior that Prisma does not model cleanly.
+
+## Tenant Transaction Pattern
 
 Every protected request that touches tenant data should conceptually execute:
 
@@ -120,7 +202,7 @@ perform service work
 COMMIT
 ```
 
-This ensures PostgreSQL RLS uses server-resolved tenant context.
+Tenant ID comes from authenticated server context, never from arbitrary client input.
 
 ## Stop Completion Transaction
 
@@ -137,15 +219,16 @@ All of these must succeed or fail together:
 - money ledger posting,
 - TripStop state change.
 
-Never leave a StopEvent committed without its required ledger consequences.
+Never leave a StopEvent committed without required ledger consequences.
 
 ## Append-Only Strategy
 
-Do not write generic repository methods such as:
+Do not expose generic repository methods such as:
 
 - `updateInventoryLedger()`
 - `deleteInventoryLedger()`
 - `updateMoneyLedger()`
+- `deleteMoneyLedger()`
 
 Corrections use explicit operations:
 
@@ -153,20 +236,33 @@ Corrections use explicit operations:
 - create adjustment,
 - create correction event.
 
+## Testing
+
+Use Jest.
+
+Integration tests must execute against real PostgreSQL behavior so RLS, constraints, triggers and transaction handling are actually exercised.
+
+Mock-only tests are not sufficient for ledger-critical workflows.
+
 ## Background Work
 
-Sprint 0 may keep reconciliation synchronous for simplicity.
+Sprint 0 may keep reconciliation synchronous.
 
-Future job-runner responsibilities:
+Later introduce:
 
-- scheduled reconciliation alerts,
+```text
+Redis
+  ↓
+BullMQ
+```
+
+for:
+
 - billing,
 - payroll,
-- dues aging,
-- compliance alerts,
-- notifications.
-
-Do not couple those future engines into the first operational APIs.
+- notifications,
+- scheduled EOD checks,
+- retryable external integrations.
 
 ## Observability
 
@@ -180,4 +276,4 @@ At minimum log:
 - transaction outcome,
 - error code.
 
-Never log secrets or sensitive authentication tokens.
+Never log secrets, auth tokens, or sensitive payment credentials.
