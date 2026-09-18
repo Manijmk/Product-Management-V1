@@ -21,6 +21,39 @@ export class StaffRepository {
     });
   }
 
+  find(transaction: TenantPrismaTransaction, tenantId: number, staffId: number) {
+    return transaction.staff.findFirst({
+      where: { tenant_id: BigInt(tenantId), staff_id: BigInt(staffId) },
+      select: {
+        staff_id: true,
+        user_id: true,
+        employee_code: true,
+        name: true,
+        mobile: true,
+        staff_type: true,
+        status: true,
+        joined_on: true,
+        created_at: true,
+        updated_at: true,
+        app_user_staff_tenant_id_user_idToapp_user: {
+          select: {
+            userId: true,
+            loginIdentity: true,
+            email: true,
+            mobile: true,
+            displayName: true,
+            status: true,
+            user_role_user_role_tenant_id_user_idToapp_user: {
+              where: { role: { status: "ACTIVE" } },
+              orderBy: { role: { role_code: "asc" } },
+              select: { role: { select: { role_id: true, role_code: true, role_name: true } } }
+            }
+          }
+        }
+      }
+    });
+  }
+
   create(
     transaction: TenantPrismaTransaction,
     tenantId: number,

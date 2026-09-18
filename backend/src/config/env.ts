@@ -16,6 +16,11 @@ const postgresUrl = z.string().url().refine(
   "Database URLs must use the PostgreSQL protocol"
 );
 
+const optionalSeedPassword = z.preprocess(
+  (value) => value === "" ? undefined : value,
+  z.string().min(8).max(256).optional()
+);
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_NAME: z.string().min(1).default("pms-backend"),
@@ -28,6 +33,7 @@ const schema = z.object({
   AUTH_JWT_SECRET: z.string().min(32, "AUTH_JWT_SECRET must be at least 32 characters"),
   AUTH_JWT_ISSUER: z.string().min(1).default("pms-backend"),
   AUTH_JWT_AUDIENCE: z.string().min(1).default("pms-api"),
+  UAT_SEED_PASSWORD: optionalSeedPassword,
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   SWAGGER_ENABLED: booleanFromString.default(true)
 });

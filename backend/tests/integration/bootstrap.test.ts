@@ -104,7 +104,7 @@ afterAll(async () => {
 });
 
 describe("authoritative database bootstrap", () => {
-  it("applies exactly migrations 001 through 006 and is idempotent", async () => {
+  it("applies exactly migrations 001 through 007 and is idempotent", async () => {
     expect(firstMigrationRun).toEqual([...FOUNDATION_MIGRATIONS]);
 
     const recorded = await pool.query<{ filename: string; checksum: string }>(
@@ -164,7 +164,7 @@ describe("authoritative database bootstrap", () => {
 
       const health = await server.inject({ method: "GET", url: "/api/v1/health" });
       expect(health.statusCode).toBe(200);
-      expect(health.json()).toEqual({ status: "ok", database: "reachable" });
+      expect(health.json()).toEqual({ data: { status: "ok", database: "reachable" } });
 
       const openApi = await server.inject({ method: "GET", url: "/api/docs-json" });
       expect(openApi.statusCode).toBe(200);
@@ -173,6 +173,15 @@ describe("authoritative database bootstrap", () => {
         "/api/v1/products": expect.any(Object),
         "/api/v1/customers": expect.any(Object)
       }));
+      expect(openApi.json().info).toMatchObject({ title: "PMS Sprint 0 API", version: "1.0.0" });
+      expect(openApi.json()["x-pms-error-codes"]).toEqual(expect.arrayContaining([
+        "VALIDATION_FAILED",
+        "ROLE_NOT_AUTHORIZED",
+        "INTERNAL_ERROR"
+      ]));
+      const frozenContract = await server.inject({ method: "GET", url: "/api/openapi.json" });
+      expect(frozenContract.statusCode).toBe(200);
+      expect(frozenContract.json()).toEqual(openApi.json());
     } finally {
       await app?.close();
       await appPool.end();

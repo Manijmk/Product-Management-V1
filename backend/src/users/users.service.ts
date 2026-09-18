@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { ApiError } from "../http/api-error.js";
+import { type ListQueryDto, pageResponse } from "../http/list-query.dto.js";
 import type { AuthenticatedTenantContext } from "../tenancy/authenticated-tenant-context.js";
 import { PrismaTenantTransactionService } from "../tenancy/prisma-tenant-transaction.service.js";
 import type { AssignRoleDto } from "./dto/assign-role.dto.js";
@@ -38,16 +39,16 @@ export class UsersService {
     private readonly repository: UsersRepository
   ) {}
 
-  list(context: AuthenticatedTenantContext) {
+  list(context: AuthenticatedTenantContext, query: ListQueryDto) {
     return this.transactions.run(context, async (transaction) => {
       const [users, assignments] = await Promise.all([
         this.repository.list(transaction, context.tenantId),
         this.repository.listAssignments(transaction, context.tenantId)
       ]);
-      return users.map((user) => mapUser(
+      return pageResponse(users.map((user) => mapUser(
         user,
         assignments.filter((assignment) => assignment.user_id === user.userId).map((assignment) => assignment.role)
-      ));
+      )), query);
     });
   }
 
@@ -60,15 +61,15 @@ export class UsersService {
     ));
   }
 
-  listRoles(context: AuthenticatedTenantContext) {
-    return this.transactions.run(context, async (transaction) => (
+  listRoles(context: AuthenticatedTenantContext, query: ListQueryDto) {
+    return this.transactions.run(context, async (transaction) => pageResponse((
       await this.repository.listRoles(transaction, context.tenantId)
     ).map((role) => ({
       roleId: role.role_id.toString(),
       roleCode: role.role_code,
       roleName: role.role_name,
       status: role.status
-    })));
+    })), query));
   }
 
   assignRole(context: AuthenticatedTenantContext, userId: number, input: AssignRoleDto) {

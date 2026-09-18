@@ -9,7 +9,8 @@ export const FOUNDATION_MIGRATIONS = [
   "003_execution_ledgers.sql",
   "004_reconciliation.sql",
   "005_runtime_security.sql",
-  "006_schema_fixes.sql"
+  "006_schema_fixes.sql",
+  "007_local_authentication.sql"
 ] as const;
 
 interface MigrationSource {

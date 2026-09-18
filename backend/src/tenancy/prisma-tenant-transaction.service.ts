@@ -13,7 +13,7 @@ export type TenantPrismaTransaction = Prisma.TransactionClient;
 @Injectable()
 export class PrismaTenantTransactionService {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(APP_CONFIG) private readonly config: AppConfig
   ) {}
 
@@ -34,6 +34,7 @@ export class PrismaTenantTransactionService {
       await transaction.$queryRaw(
         Prisma.sql`SELECT set_config('app.tenant_id', ${String(context.tenantId)}, true)`
       );
+      await transaction.$executeRawUnsafe("SET LOCAL search_path TO pms, public");
       return work(transaction);
     });
   }

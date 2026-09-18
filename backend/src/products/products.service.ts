@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { ApiError } from "../http/api-error.js";
+import { type ListQueryDto, pageResponse } from "../http/list-query.dto.js";
 import type { AuthenticatedTenantContext } from "../tenancy/authenticated-tenant-context.js";
 import { PrismaTenantTransactionService } from "../tenancy/prisma-tenant-transaction.service.js";
 import { parseEffectivePeriod, validateProductConfiguration } from "./domain/product-rules.js";
@@ -54,10 +55,10 @@ export class ProductsService {
     private readonly repository: ProductsRepository
   ) {}
 
-  list(context: AuthenticatedTenantContext) {
-    return this.transactions.run(context, async (transaction) => (
-      await this.repository.list(transaction, context.tenantId)
-    ).map(mapProduct));
+  list(context: AuthenticatedTenantContext, query: ListQueryDto) {
+    return this.transactions.run(context, async (transaction) => pageResponse(
+      (await this.repository.list(transaction, context.tenantId)).map(mapProduct), query
+    ));
   }
 
   get(context: AuthenticatedTenantContext, productId: number) {

@@ -9,8 +9,9 @@ import type { FastifyReply } from "fastify";
 import { Prisma } from "@prisma/client";
 import type { ApiErrorBody } from "./api-error.js";
 import { DomainError } from "../domain/domain-error.js";
+import type { ApiErrorCode } from "./error-codes.js";
 
-function errorBody(code: string, message: string, details: Readonly<Record<string, unknown>> = {}): ApiErrorBody {
+function errorBody(code: ApiErrorCode, message: string, details: Readonly<Record<string, unknown>> = {}): ApiErrorBody {
   return { error: { code, message, details } };
 }
 

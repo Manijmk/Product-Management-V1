@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { ApiError } from "../http/api-error.js";
+import { type ListQueryDto, pageResponse } from "../http/list-query.dto.js";
 import type { AuthenticatedTenantContext } from "../tenancy/authenticated-tenant-context.js";
 import { PrismaTenantTransactionService } from "../tenancy/prisma-tenant-transaction.service.js";
 import { UsersRepository } from "../users/users.repository.js";
@@ -38,10 +39,35 @@ export class StaffService {
     private readonly users: UsersRepository
   ) {}
 
-  list(context: AuthenticatedTenantContext) {
-    return this.transactions.run(context, async (transaction) => (
-      await this.repository.list(transaction, context.tenantId)
-    ).map(mapStaff));
+  list(context: AuthenticatedTenantContext, query: ListQueryDto) {
+    return this.transactions.run(context, async (transaction) => pageResponse(
+      (await this.repository.list(transaction, context.tenantId)).map(mapStaff), query
+    ));
+  }
+
+  get(context: AuthenticatedTenantContext, staffId: number) {
+    return this.transactions.run(context, async (transaction) => {
+      const staff = await this.repository.find(transaction, context.tenantId, staffId);
+      if (staff === null) throw new ApiError(HttpStatus.NOT_FOUND, "STAFF_NOT_FOUND", "The staff member was not found");
+      const user = staff.app_user_staff_tenant_id_user_idToapp_user;
+      return {
+        ...mapStaff(staff),
+        updatedAt: staff.updated_at.toISOString(),
+        user: user === null ? null : {
+          userId: user.userId.toString(),
+          loginIdentity: user.loginIdentity,
+          email: user.email,
+          mobile: user.mobile,
+          displayName: user.displayName,
+          status: user.status,
+          roles: user.user_role_user_role_tenant_id_user_idToapp_user.map(({ role }) => ({
+            roleId: role.role_id.toString(),
+            roleCode: role.role_code,
+            roleName: role.role_name
+          }))
+        }
+      };
+    });
   }
 
   create(context: AuthenticatedTenantContext, input: CreateStaffDto) {

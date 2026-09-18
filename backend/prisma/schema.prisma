@@ -49,6 +49,7 @@ model AppUser {
   createdAt                                                                                              DateTime                         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                                                                                              DateTime                         @default(now()) @map("updated_at") @db.Timestamptz(6)
   app_user                                                                                               AppUser?                         @relation("app_userToapp_user", fields: [tenantId, createdByUserId], references: [tenantId, userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_app_user_created_by")
+  password_credential                                                                                    app_user_password_credential?
   other_app_user                                                                                         AppUser[]                        @relation("app_userToapp_user")
   tenant                                                                                                 Tenant                           @relation(fields: [tenantId], references: [tenantId], onDelete: NoAction, onUpdate: NoAction, map: "fk_app_user_tenant")
   cash_handover_cash_handover_tenant_id_confirmed_by_user_idToapp_user                                   cash_handover[]                  @relation("cash_handover_tenant_id_confirmed_by_user_idToapp_user")
@@ -95,6 +96,22 @@ model AppUser {
   @@unique([tenantId, userId], map: "uq_app_user_tenant_user")
   @@index([tenantId, status], map: "ix_app_user_tenant_status")
   @@map("app_user")
+  @@schema("pms")
+}
+
+model app_user_password_credential {
+  tenant_id            BigInt
+  user_id              BigInt
+  password_hash        String   @db.VarChar(512)
+  password_changed_at  DateTime @default(now()) @db.Timestamptz(6)
+  failed_attempt_count Int      @default(0)
+  locked_until         DateTime? @db.Timestamptz(6)
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @default(now()) @db.Timestamptz(6)
+  app_user             AppUser  @relation(fields: [tenant_id, user_id], references: [tenantId, userId], onDelete: NoAction, onUpdate: NoAction, map: "fk_password_credential_user")
+
+  @@id([tenant_id, user_id])
+  @@map("app_user_password_credential")
   @@schema("pms")
 }
 

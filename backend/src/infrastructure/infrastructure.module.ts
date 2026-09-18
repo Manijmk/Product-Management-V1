@@ -8,6 +8,16 @@ import { PrismaService } from "./prisma.service.js";
 import { TenantTransactionService } from "../tenancy/tenant-transaction.service.js";
 import { PrismaTenantTransactionService } from "../tenancy/prisma-tenant-transaction.service.js";
 
+export const SENSITIVE_LOG_PATHS = [
+  "req.headers.authorization",
+  "req.body.password",
+  "res.headers.authorization",
+  "accessToken",
+  "password",
+  "passwordHash",
+  "password_hash"
+] as const;
+
 @Global()
 @Module({})
 export class InfrastructureModule {
@@ -19,7 +29,7 @@ export class InfrastructureModule {
           pinoHttp: {
             level: config.LOG_LEVEL,
             genReqId: (request) => String(request.headers["x-correlation-id"] ?? randomUUID()),
-            redact: ["req.headers.authorization"]
+            redact: [...SENSITIVE_LOG_PATHS]
           }
         })
       ],

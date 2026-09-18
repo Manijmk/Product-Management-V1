@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
 import { ApiError } from "../http/api-error.js";
+import { type ListQueryDto, pageResponse } from "../http/list-query.dto.js";
 import { parseEffectivePeriod } from "../products/domain/product-rules.js";
 import type { AuthenticatedTenantContext } from "../tenancy/authenticated-tenant-context.js";
 import { PrismaTenantTransactionService } from "../tenancy/prisma-tenant-transaction.service.js";
@@ -63,10 +64,10 @@ export class CustomersService {
     private readonly repository: CustomersRepository
   ) {}
 
-  list(context: AuthenticatedTenantContext) {
-    return this.transactions.run(context, async (transaction) => (
-      await this.repository.list(transaction, context.tenantId)
-    ).map(mapCustomer));
+  list(context: AuthenticatedTenantContext, query: ListQueryDto) {
+    return this.transactions.run(context, async (transaction) => pageResponse(
+      (await this.repository.list(transaction, context.tenantId)).map(mapCustomer), query
+    ));
   }
 
   get(context: AuthenticatedTenantContext, partyId: number) {

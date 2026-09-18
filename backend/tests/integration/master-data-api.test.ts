@@ -10,6 +10,7 @@ import type { AppConfig } from "../../src/config/env.js";
 import { createPool } from "../../src/db/pool.js";
 import { applyMigrations } from "../../src/db/migrations.js";
 import { withSystemTransaction, withTenantTransaction } from "../../src/db/transaction.js";
+import { unwrapApiSuccess } from "../helpers/unwrap-api-success.js";
 
 const { Pool } = pg;
 const migrationDirectory = path.resolve(process.cwd(), "../database");
@@ -85,14 +86,14 @@ async function seedIdentity(
   );
 }
 
-function inject(token: string | undefined, options: InjectOptions) {
-  return server.inject({
+async function inject(token: string | undefined, options: InjectOptions) {
+  return unwrapApiSuccess(await server.inject({
     ...options,
     headers: {
       ...(options.headers ?? {}),
       ...(token === undefined ? {} : { authorization: `Bearer ${token}` })
     }
-  });
+  }));
 }
 
 function errorCode(response: { json(): unknown }): string | undefined {
@@ -156,7 +157,7 @@ describe("product master-data APIs", () => {
   it("keeps Tenant B products invisible to Tenant A and blocks body tenant authority", async () => {
     const list = await inject(ownerToken, { method: "GET", url: "/api/v1/products" });
     expect(list.statusCode).toBe(200);
-    expect(list.json()).toEqual([]);
+    expect(list.json()).toMatchObject({ items: [], page: { count: 0, total: 0, hasMore: false } });
 
     const crossRead = await inject(ownerToken, {
       method: "GET",
@@ -180,7 +181,7 @@ describe("product master-data APIs", () => {
     expect(errorCode(crossWrite)).toBe("VALIDATION_FAILED");
 
     const tenantBList = await inject(tenantBOwnerToken, { method: "GET", url: "/api/v1/products" });
-    expect((tenantBList.json() as { productCode: string }[]).map((item) => item.productCode))
+    expect((tenantBList.json() as { items: { productCode: string }[] }).items.map((item) => item.productCode))
       .toEqual(["B_ONLY"]);
   });
 
@@ -252,7 +253,8 @@ describe("user, role, and staff APIs", () => {
   it("uses existing tenant role rows and permits staff without an AppUser login", async () => {
     const roles = await inject(ownerToken, { method: "GET", url: "/api/v1/roles" });
     expect(roles.statusCode).toBe(200);
-    expect((roles.json() as { roleCode: string }[]).map((role) => role.roleCode))
+    const roleItems = (roles.json() as { items: { roleId: string; roleCode: string }[] }).items;
+    expect(roleItems.map((role) => role.roleCode))
       .toEqual(["ADMIN", "OWNER", "ROUTE_STAFF"]);
 
     const user = await inject(ownerToken, {
@@ -262,7 +264,7 @@ describe("user, role, and staff APIs", () => {
     });
     expect(user.statusCode).toBe(201);
     const userId = (user.json() as { userId: string }).userId;
-    const routeRole = (roles.json() as { roleId: string; roleCode: string }[])
+    const routeRole = roleItems
       .find((role) => role.roleCode === "ROUTE_STAFF")!;
 
     const assignment = await inject(ownerToken, {
@@ -280,6 +282,26 @@ describe("user, role, and staff APIs", () => {
     });
     expect(staff.statusCode).toBe(201);
     expect(staff.json()).toMatchObject({ userId: null, name: "No Login Staff" });
+
+    const staffDetail = await inject(ownerToken, {
+      method: "GET",
+      url: `/api/v1/staff/${(staff.json() as { staffId: string }).staffId}`
+    });
+    expect(staffDetail.statusCode).toBe(200);
+    expect(staffDetail.json()).toMatchObject({ userId: null, name: "No Login Staff", user: null });
+
+    const linkedStaff = await inject(ownerToken, {
+      method: "POST",
+      url: "/api/v1/staff",
+      payload: { userId: Number(userId), name: "Linked Route Staff", staffType: "DELIVERY_STAFF" }
+    });
+    const linkedDetail = await inject(ownerToken, {
+      method: "GET",
+      url: `/api/v1/staff/${(linkedStaff.json() as { staffId: string }).staffId}`
+    });
+    expect(linkedDetail.json()).toMatchObject({
+      user: { userId, roles: [expect.objectContaining({ roleCode: "ROUTE_STAFF" })] }
+    });
   });
 });
 
@@ -395,6 +417,35 @@ describe("customer master-data APIs", () => {
     });
     expect(tenantBCrossRead.statusCode).toBe(404);
     expect(errorCode(tenantBCrossRead)).toBe("CUSTOMER_NOT_FOUND");
+  });
+});
+
+describe("Sprint 0E list contract and performance sanity", () => {
+  it("bounds pagination, applies filters, and returns a 250-row tenant list within the sanity budget", async () => {
+    await withTenantTransaction(seedPool, { tenantId: tenantA, userId: tenantAOwnerId, roles: ["OWNER"] }, async (client) => {
+      await client.query(
+        `INSERT INTO product (tenant_id, product_code, name, unit_type, created_by_user_id)
+         SELECT $1, 'PERF-' || value, 'Performance Product ' || value, 'CONSUMABLE', $2
+         FROM generate_series(1, 250) value`,
+        [tenantA, tenantAOwnerId]
+      );
+    }, { runtimeRole });
+    const startedAt = performance.now();
+    const response = await inject(ownerToken, {
+      method: "GET",
+      url: "/api/v1/products?limit=100&offset=100&q=Performance&status=ACTIVE"
+    });
+    const elapsedMs = performance.now() - startedAt;
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      page: { limit: 100, offset: 100, count: 100, total: 250, hasMore: true }
+    });
+    expect((response.json() as { items: unknown[] }).items).toHaveLength(100);
+    expect(elapsedMs).toBeLessThan(2_000);
+
+    const invalidLimit = await inject(ownerToken, { method: "GET", url: "/api/v1/products?limit=101" });
+    expect(invalidLimit.statusCode).toBe(400);
+    expect(errorCode(invalidLimit)).toBe("VALIDATION_FAILED");
   });
 });
 
